@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0b0e14">
 <title>SensLink · 跨端灵敏度同步台</title>
-<meta name="description" content="以 cm/360 为锚点，把一套鼠标灵敏度换算到多个 FPS 网游；一条链接在电脑和手机之间同步配置。">
+<meta name="description" content="在浏览器靶场里用首次甩枪偏差 + 自适应阶梯测出个人最佳鼠标灵敏度，再对齐到多款 FPS 网游；一条链接在电脑和手机之间同步配置。">
 <style>
 :root{
   --bg:#0b0e14; --card:#141a24; --card2:#1b2230; --line:#2a3342;
@@ -58,6 +58,8 @@ button{
   border-radius:10px;padding:9px 14px;font-size:13px;cursor:pointer;transition:.15s;
 }
 button:hover{border-color:var(--acc2);color:var(--acc2)}
+button:disabled{opacity:.42;cursor:not-allowed}
+button:disabled:hover{border-color:var(--line);color:var(--txt)}
 button.primary{background:var(--acc);border-color:var(--acc);color:#fff;font-weight:700}
 button.primary:hover{background:#ff5d6a;color:#fff}
 button.ghost{background:transparent}
@@ -104,24 +106,141 @@ footer{color:var(--dim);font-size:12px;text-align:center;padding:28px 0 0}
   header{padding-top:22px}h1{font-size:22px}.big{font-size:34px}
   .card{padding:16px}
 }
+
+/* ===================== 靶场测试模块 ===================== */
+.section-lead{background:linear-gradient(135deg,#2a1420,#141a24 60%);border-color:#4a2430}
+.section-lead h2 i{background:var(--acc2)}
+.section-lead .hint{color:#b9a2a8}
+.mode-tabs{display:flex;gap:8px;flex-wrap:wrap;margin:2px 0 14px}
+.mode-tabs button.active{border-color:var(--acc2);color:var(--acc2);background:#122421}
+.phase{
+  display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:var(--card2);
+  border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-top:14px;font-size:12px;color:var(--sub);
+}
+.phase b{font:600 15px/1 var(--mono);color:var(--acc2)}
+.phase .sep{flex:1}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--dim);display:inline-block;margin-right:6px}
+.dot.on{background:var(--ok);box-shadow:0 0 8px var(--ok)}
+.dot.off{background:var(--warn);box-shadow:0 0 8px var(--warn)}
+#chart{width:100%;height:150px;background:#0a0f17;border:1px solid var(--line);border-radius:10px;margin-top:12px;display:block}
+.report{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-top:12px}
+.report .stat b{font-size:17px;color:var(--txt)}
+.report .stat.hl b{color:var(--acc)}
+.verdict{border-left:3px solid var(--acc2);background:#10201e;padding:10px 12px;border-radius:0 8px 8px 0;margin-top:12px;font-size:13px;color:var(--sub)}
+.verdict.warn{border-color:var(--warn);background:#241d10}
+.verdict b{color:var(--txt)}
+.hist{width:100%;font-size:12px;margin-top:10px}
+.hist td{border-bottom:1px solid #222b38;padding:6px 8px}
+.hist th{color:var(--dim);font-size:11px}
+.tips{font-size:12px;color:var(--sub);line-height:1.9;margin:10px 0 0;padding-left:18px}
+.tips li{margin-bottom:2px}
+.tips b{color:var(--acc2)}
+
+/* 全屏靶场 */
+#arena{position:fixed;inset:0;z-index:50;background:#0a0d13;display:none;cursor:none;overflow:hidden}
+#arena.show{display:block}
+#arenaCanvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+#arenaHud{
+  position:absolute;top:0;left:0;right:0;padding:14px 18px;display:flex;gap:18px;flex-wrap:wrap;
+  font:12px/1.4 var(--mono);color:#c8d4e4;background:linear-gradient(180deg,rgba(8,11,17,.92),transparent);
+  pointer-events:none;text-shadow:0 1px 3px #000;
+}
+#arenaHud b{color:var(--acc2);font-weight:700}
+#arenaHud .warn{color:var(--warn)}
+#crosshair{position:absolute;left:50%;top:50%;width:22px;height:22px;transform:translate(-50%,-50%);pointer-events:none}
+#crosshair::before,#crosshair::after{content:'';position:absolute;background:#18e0bd;box-shadow:0 0 6px #18e0bd}
+#crosshair::before{left:50%;top:0;width:2px;height:100%;transform:translateX(-50%)}
+#crosshair::after{top:50%;left:0;height:2px;width:100%;transform:translateY(-50%)}
+#arenaOverlay{
+  position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:14px;text-align:center;background:rgba(8,11,17,.78);padding:24px;cursor:default;
+}
+#arenaOverlay.hidden{display:none}
+#arenaOverlay h3{font-size:26px;margin:0;letter-spacing:1px}
+#arenaOverlay p{color:var(--sub);font-size:14px;max-width:560px;margin:0;line-height:1.8}
+#arenaOverlay .k{font:700 15px/1 var(--mono);color:var(--acc2)}
+#arenaOverlay button{font-size:15px;padding:12px 26px;cursor:pointer}
+#arenaExit{position:absolute;right:16px;bottom:16px;cursor:pointer;z-index:2}
+#arenaFlash{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font:800 22px/1 var(--mono);pointer-events:none;opacity:0;transition:opacity .12s}
+@media(max-width:860px){
+  #arenaHud{font-size:11px;gap:10px;padding:10px}
+  #arenaOverlay h3{font-size:20px}
+  .report{grid-template-columns:repeat(2,1fr)}
+}
+
 </style>
 </head>
 <body>
 <div class="wrap">
 <header>
   <div>
-    <h1>Sens<span>Link</span> · 灵敏度同步台</h1>
-    <div class="tagline">一套手感，多游戏对齐；一条链接，电脑 ↔ 手机同步。默认基准：端瓦 1600 DPI × 0.3</div>
+    <h1>Sens<span>Link</span> · 个人灵敏度实验室</h1>
+    <div class="tagline">先测出你个人的最佳灵敏度，再把它对齐到多游戏；电脑测、手机带走。默认基准：端瓦 1600 DPI × 0.3</div>
   </div>
-  <div class="badge">cm/360 锚点 · 纯静态 · 零后端</div>
+  <div class="badge">首次甩枪偏差 · 自适应阶梯 · 盲测 A/B · 零后端</div>
 </header>
 
 <main class="grid">
 
+  <!-- ① 核心：测出个人最佳灵敏度 -->
+  <section class="card wide section-lead">
+    <h2><i></i>① 测出你的个人最佳灵敏度（核心）</h2>
+    <p class="hint">不问「哪个舒服」——舒服只是适应了两天的错觉。这里在浏览器里 1:1 复刻端瓦相机，量你第一次甩枪是系统过头还是不到位，用自适应阶梯收敛，最后盲测 A/B 排除安慰剂。测完的结果会自动流到下面的换算表。</p>
+    <div class="row">
+      <div class="field"><label for="tDpi">鼠标 DPI（如实填驱动里的档位）</label><input id="tDpi" type="number" min="100" max="30000" step="50" inputmode="decimal"></div>
+      <div class="field"><label for="tStart">起始 cm/360（默认用你当前配置）</label><input id="tStart" type="number" min="5" max="150" step="0.1" inputmode="decimal"></div>
+      <div class="field"><label for="tRange">搜索范围</label><select id="tRange"><option value="1.35">精细 ×1.35</option><option value="1.8" selected>标准 ×1.8（推荐）</option><option value="2.6">宽泛 ×2.6</option></select></div>
+      <div class="field"><label for="tPer">每轮有效甩枪数</label><select id="tPer"><option value="6">6 次（快测）</option><option value="8" selected>8 次（推荐）</option><option value="12">12 次（更稳）</option></select></div>
+    </div>
+    <div class="mode-tabs">
+      <button class="mini active" id="tModeFlick" data-mode="flick">主测试 · 甩枪收敛</button>
+      <button class="mini" id="tModeTrack" data-mode="track">交叉验证 · 追踪压靶</button>
+      <button class="mini" id="tModeMicro" data-mode="micro">交叉验证 · 微修正</button>
+    </div>
+    <div class="phase">
+      <span><span class="dot" id="tDot"></span><span id="tRaw">原始输入：待检测</span></span>
+      <span class="sep"></span>
+      <span>当前 <b id="tCurCm">—</b> cm/360</span>
+      <span>轮次 <b id="tRound">0</b></span>
+      <span>状态 <b id="tPhase" style="font-size:12px">未开始</b></span>
+    </div>
+    <canvas id="chart" width="1000" height="300"></canvas>
+    <div class="btns">
+      <button class="primary" id="tStartBtn">进入靶场 · 开始测试</button>
+      <button id="tCalibBtn">校准鼠标计数 / DPI</button>
+      <button id="tApplyBtn">把测试结果设为换算基准</button>
+      <button class="ghost" id="tResetBtn">清空测试进度</button>
+    </div>
+    <p class="note" id="tNote"></p>
+    <details>
+      <summary>测试原理、为什么这样测、以及不成立的时候</summary>
+      <div class="prose" style="margin-top:12px">
+        <p><b>相机 1:1。</b>靶场里每收到一个鼠标计数就转 <code>0.07° × sens</code>，水平 FOV 103°（16:9），并申请 <code>unadjustedMovement</code> 拿原始计数、绕开系统指针加速。所以你在这里甩 180° 的手部位移和在端瓦里是一样的；Windows 指针速度保持 6/11、关掉「提高指针精确度」、浏览器缩放 100%、驱动里关掉加速，否则测的是 OS 而不是你。</p>
+        <p><b>度量：首次弹道子运动偏差。</b>快速瞄准 = 一次不靠视觉反馈的弹道挥动 + 之后的小修正。工具把你每次甩枪的轨迹切出第一段，拿它的终点和靶子实际角度比，得到有符号偏差：<b>正 = 冲过头（灵敏度偏高）</b>，<b>负 = 没到（偏低）</b>。单发很噪，一个 block 的中位数才是信号。</p>
+        <p><b>搜索：自适应阶梯。</b>每轮按偏差方向把 <code>cm/360</code> 往减小偏差的方向推，步长随方向反转逐轮收缩；连续两次反转且偏差落进噪声带，判定收敛。用 cm/360 而不是灵敏度数值做步长，是因为前者有物理意义、跨游戏通用。</p>
+        <p><b>验证：盲测 A/B。</b>收敛后，推荐值与一个 ±12% 的诱饵值随机顺序各打一轮，界面不告诉你是哪个，用「偏差绝对值中位数 + 命中数」判定。推荐值没赢就如实报「无显著差异，保持原值」——不粉饰算法。</p>
+        <p><b>诚实的边界：</b>这里只测甩枪，追踪、压枪、身法、FOV 观感都不测，所以「甩枪最优」不等于「全能最优」，请配合下面的追踪 / 微修正交叉验证。它测的是<b>今天、这套桌椅鼠标垫下</b>你的手臂最顺手的值，会随状态和练习漂移。一天测 2~3 次方向一致才采信，填进游戏后至少打 10 局、固定用一周再评价。触屏没有 DPI 概念，手机端只能查看和携带报告，不能测。</p>
+      </div>
+    </details>
+  </section>
+
+  <!-- ② 测试报告 -->
+  <section class="card wide">
+    <h2><i></i>② 测试报告与历史</h2>
+    <p class="hint">每次会话都留在本机，用来看「同一天多次、跨天」的趋势，别被一次手感骗了。</p>
+    <div id="tReport"><div class="hint" style="margin:0">还没有测试记录。完成一次主测试后这里会给出推荐值、过头/不足比例、收敛轨迹和盲测结论。</div></div>
+    <div class="btns">
+      <button id="tExportBtn">导出全部试验数据 JSON</button>
+      <button id="tClearHistBtn" class="ghost">清空历史</button>
+    </div>
+    <div style="overflow:auto;margin-top:14px"><table class="hist"><thead><tr><th>时间</th><th>推荐 cm/360</th><th>@DPI 灵敏度</th><th>收敛</th><th>盲测</th><th>过头/不足</th></tr></thead><tbody id="tHist"></tbody></table></div>
+  </section>
+
+
   <!-- 基准 -->
   <section class="card">
-    <h2><i></i>① 我的基准配置</h2>
-    <p class="hint">以你正在玩的游戏为准。换算的本质是保持「转一整圈手要移动多远」不变；这里显示输入框里的原始值，微调只影响下方换算结果。</p>
+    <h2><i></i>③ 我的基准配置（换算起点）</h2>
+    <p class="hint">默认是你当前在用的端瓦 1600 DPI × 0.3；也可以直接由上面的测试报告一键填入。换算的本质是保持「转一整圈手要移动多远」不变；这里显示输入框里的原始值，微调只影响下方换算结果。</p>
     <div class="row">
       <div class="field"><label for="srcGame">基准游戏</label><select id="srcGame"></select></div>
       <div class="field"><label for="srcDpi">鼠标 DPI</label><input id="srcDpi" type="number" min="100" max="30000" step="50" inputmode="decimal"></div>
@@ -138,13 +257,14 @@ footer{color:var(--dim);font-size:12px;text-align:center;padding:28px 0 0}
       <button class="mini" data-dpi="800">改成 800 DPI 同手感</button>
       <button class="mini" data-dpi="1600">改成 1600 DPI 同手感</button>
       <button class="mini ghost" id="resetBtn">恢复默认</button>
+      <button class="mini" id="applyReport2">从测试报告填入</button>
     </div>
     <p class="note mute">提示：换 DPI 只是把灵敏度假数按比例缩放，cm/360 不变，手感一致。</p>
   </section>
 
   <!-- 目标换算 -->
   <section class="card">
-    <h2><i></i>② 换算到目标游戏</h2>
+    <h2><i></i>④ 换算到目标游戏（次要功能）</h2>
     <p class="hint">结果直接填进目标游戏的「鼠标灵敏度 / 腰射灵敏度」栏。</p>
     <div class="row">
       <div class="field"><label for="tgtGame">目标游戏</label><select id="tgtGame"></select></div>
@@ -176,7 +296,7 @@ footer{color:var(--dim);font-size:12px;text-align:center;padding:28px 0 0}
 
   <!-- 全游戏表 -->
   <section class="card wide">
-    <h2><i></i>③ 全游戏等效表</h2>
+    <h2><i></i>⑤ 全游戏等效表</h2>
     <p class="hint">以当前预览手感为基准，列出全部内置游戏 + 自定义游戏在目标 DPI 下的等效数值（表格可上下滚动）。带「参考」标签的游戏请务必进靶场实测一圈校准。</p>
     <div class="row" style="margin-bottom:12px">
       <div class="field"><label for="filter">筛选 / 搜索游戏</label><input id="filter" type="text" placeholder="例如：瓦、CS2、Apex、网游"></div>
@@ -192,7 +312,7 @@ footer{color:var(--dim);font-size:12px;text-align:center;padding:28px 0 0}
 
   <!-- 跨端共享 -->
   <section class="card wide">
-    <h2><i></i>④ 电脑 ↔ 手机共享</h2>
+    <h2><i></i>⑥ 电脑 ↔ 手机共享</h2>
     <p class="hint">配置全部编码进链接 / 分享码，不需要账号、服务器或数据库。部署到 GitHub Pages 后，电脑生成、手机扫码即可还原；本地双击打开时链接是 <code style="font-family:var(--mono)">file://</code> 路径，只在本机有效，跨设备请改用「分享码」粘贴载入。</p>
     <div class="row">
       <div class="field"><label for="pname">这套配置的名字</label><input id="pname" type="text" placeholder="例如：主号瓦配置"></div>
@@ -221,7 +341,7 @@ footer{color:var(--dim);font-size:12px;text-align:center;padding:28px 0 0}
 
   <!-- 自定义游戏 -->
   <section class="card wide">
-    <h2><i></i>⑤ 添加任意网游（实测反推 yaw）</h2>
+    <h2><i></i>⑦ 添加任意网游（实测反推 yaw）</h2>
     <p class="hint">内置表之外的游戏，用「靶场转一整圈」实测距离反推它的 yaw，之后它就能和所有游戏互相换算，并一起写进分享码。</p>
     <div class="row">
       <div class="field"><label for="cgName">游戏名</label><input id="cgName" type="text" placeholder="例如：穿越火线 / 逆战"></div>
@@ -242,7 +362,7 @@ footer{color:var(--dim);font-size:12px;text-align:center;padding:28px 0 0}
         <p>你的 1600 DPI × 0.3（端瓦）→ eDPI 480、<b>27.21 cm/360</b>、10.71 in/360；同 DPI 下换算到 CS2 / Apex 约 <b>0.955</b>（瓦 sens × 3.1818），到守望先锋 2 / 使命召唤约 <b>3.18</b>。注意 eDPI 只在同一款游戏内可比，不要拿 CS2 的 eDPI 直接当瓦的用。</p>
         <p>yaw 采用公开社区常数：瓦罗兰特 0.07，CS2 / CS:GO / Apex / KovaaK's / 三角洲行动 0.022，守望先锋 2 / CoD / 命运 2 0.0066，堡垒之夜 0.005555（百分比滑块），彩虹六号 0.00572958，漫威争锋 0.0175，Deadlock 0.044，逃离塔科夫 0.125。PUBG、Rust、The Finals 等滑块的公开数值互相矛盾，本工具标为「参考」，仅作起点。</p>
         <p><b>不在换算范围内：</b>开镜 / 倍镜倍率、每英雄独立灵敏度、FOV 带来的观感差异、Windows 指针速度与「提高指针精确度」、鼠标加速、手游触屏灵敏度（触屏没有 DPI 概念，手机端在这里的作用是查看与携带配置，不是换算触屏手感）。转换后请在靶场做一次完整 360° 验证：转多了调小、转少了调大。</p>
-        <p>数据来源：mouse-sensitivity.com、SensLab、FPS Aim Trainer、CSDB、eDPI Calculator 等公开换算资料，仓库 README 里附链接。想要真正「一键写进游戏配置文件」，可把本页数值配合开源工具 <a href="https://github.com/sillynov/autosens" target="_blank" rel="noopener">Autosens</a> 使用；本页保持纯静态，不读写任何本地文件。</p>
+        <p><b>方法论来源：</b>AimFinder 的首次子运动偏差与自适应阶梯、XBitLabs 的盲测 A/B 与「一两发命中差异是噪声」、PSA / TenZ 二分收敛思路、SensLab 的「多场景交叉验证 + 固定至少一周」原则，以及中文开源 VALORANT 灵敏度选择器的相机复刻做法。换算的 yaw 数据来源：mouse-sensitivity.com、SensLab、FPS Aim Trainer、CSDB、eDPI Calculator 等公开换算资料，仓库 README 里附链接。想要真正「一键写进游戏配置文件」，可把本页数值配合开源工具 <a href="https://github.com/sillynov/autosens" target="_blank" rel="noopener">Autosens</a> 使用；本页保持纯静态，不读写任何本地文件。</p>
       </div>
     </details>
   </section>
@@ -250,6 +370,29 @@ footer{color:var(--dim);font-size:12px;text-align:center;padding:28px 0 0}
 
 <footer>SensLink · MIT · 单文件静态网页，可直接放到 GitHub Pages / 任意静态托管</footer>
 </div>
+
+<div id="arena">
+  <canvas id="arenaCanvas"></canvas>
+  <div id="arenaHud">
+    <span>模式 <b id="hMode">—</b></span>
+    <span>轮次 <b id="hRound">—</b></span>
+    <span>本轮 <b id="hCount">—</b></span>
+    <span>cm/360 <b id="hCm">—</b></span>
+    <span>过头 <b id="hOver">0</b></span>
+    <span>不足 <b id="hUnder">0</b></span>
+    <span id="hRaw" class="warn"></span>
+  </div>
+  <div id="crosshair"></div>
+  <div id="arenaFlash"></div>
+  <div id="arenaOverlay">
+    <h3 id="ovTitle">甩枪灵敏度测试</h3>
+    <p id="ovBody"></p>
+    <div class="k" id="ovKey">点击任意位置锁定鼠标并开始</div>
+    <button class="primary" id="ovBtn">开始</button>
+  </div>
+  <button id="arenaExit">退出 (ESC)</button>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <!-- qrcode.js v1.5.4 · MIT · (c) 2012 Ryan Day · 内嵌打包，保证离线/内网也能生成二维码 -->
@@ -575,8 +718,572 @@ $('customList').addEventListener('click',e=>{
   fillSelects(); syncInputs(); render();
 });
 
+
+/* ===================== 靶场：纯算法（挂到 window 便于自测 / 二次开发） ===================== */
+/* 第一弹道子运动终点：越过 25% 距离后，遇到明显反向或 >85ms 停顿即视为第一段结束 */
+function analyzeFlick(samples, targetDeg, opts){
+  const o = opts || {};
+  const gapMs = o.gapMs || 85, minFrac = o.minFrac || 0.25;
+  if(!samples.length) return {bias:0, endpoint:0, clean:false, duration:0};
+  let cum = 0, endpoint = null, clean = false, lastT = null, startT = samples[0].t;
+  for(let i=0;i<samples.length;i++){
+    const s = samples[i], d = +s.d || 0;
+    if(lastT!==null && s.t-lastT>gapMs && cum > minFrac*targetDeg && endpoint===null){
+      endpoint = cum; clean = true;
+    }
+    if(d < -0.12 && cum > minFrac*targetDeg && endpoint===null){
+      endpoint = cum; clean = true;       // 用反向之前的累计值
+    }
+    cum += d; lastT = s.t;
+  }
+  if(endpoint===null){ endpoint = cum; clean = samples.length>0 && cum > minFrac*targetDeg; }
+  const bias = targetDeg>0 ? (endpoint-targetDeg)/targetDeg : 0;
+  return {bias, endpoint, clean, duration: (lastT!==null? lastT-startT : 0)};
+}
+/* 自适应阶梯：以 cm/360 为变量；过头(正偏差)→调慢(增大 cm)，不足→调快(减小 cm) */
+function staircaseStep(st, medianBias){
+  const noise = st.noise || 0.06, hi = st.hi, lo = st.lo;
+  const dir = medianBias > noise ? +1 : (medianBias < -noise ? -1 : 0);
+  let cm = st.cm, step = st.step, reversals = st.reversals||0, lastDir = st.lastDir||0;
+  let converged = false;
+  if(dir!==0){
+    if(lastDir!==0 && dir!==lastDir){ reversals++; step = Math.max(0.02, step*0.62); }
+    cm = cm * (dir>0 ? (1+step) : (1-step));
+    cm = Math.max(lo, Math.min(hi, cm));
+    lastDir = dir;
+  }else{
+    // 已落进噪声带：再要一次方向反转才判收敛
+    if(reversals>=2) converged = true;
+  }
+  const rounds = (st.rounds||0)+1;
+  if(rounds >= (st.maxRounds||10)) converged = true;
+  return {cm, step, lo, hi, noise, reversals, lastDir, rounds, maxRounds:st.maxRounds||10,
+          direction:dir, converged, medianBias, hitBoundary: cm<=lo+1e-9 || cm>=hi-1e-9};
+}
+/* 盲测 A/B：主看 |bias| 中位数，命中数次之；差距太小就承认测不出来 */
+function blindVerdict(A, B){
+  const med = a=>{ if(!a.length) return NaN; const v=a.slice().sort((x,y)=>x-y); const m=v.length>>1;
+    return v.length%2? v[m] : (v[m-1]+v[m])/2; };
+  const ma = med(A.biases.map(Math.abs)), mb = med(B.biases.map(Math.abs));
+  const na = A.biases.length||1, nb = B.biases.length||1;
+  const ha = A.hits/na, hb = B.hits/nb;
+  const gap = Math.abs(ma-mb), tie = !isFinite(ma)||!isFinite(mb)||gap<0.02;
+  let winner = 'tie';
+  if(!tie) winner = ma<mb ? 'A' : 'B';
+  else if(Math.abs(ha-hb)>0.25) winner = ha>hb ? 'A' : 'B';
+  const minN = Math.min(na,nb);
+  const confidence = winner==='tie' ? 'low' : (minN>=6 && gap>=0.04 ? 'high' : 'medium');
+  return {winner, confidence, medA:ma, medB:mb, hitA:ha, hitB:hb, gap,
+          note: winner==='tie' ? '两档没有可分辨的差异，建议保持原值，不要为了小数点反复调。'
+                : (confidence==='high'?'差异明显且样本充足。':'有倾向但样本偏少，建议同一天再测一轮确认。')};
+}
+const degPerCount = (dpi,cm,scale)=>914.4/(dpi*cm)*(scale||1);
+const sensFromCm  = (cm,dpi,yaw)=>914.4/(dpi*cm*yaw);
+window.SensLabCore = {analyzeFlick, staircaseStep, blindVerdict, degPerCount, sensFromCm};
+
+/* ===================== 靶场：状态 ===================== */
+const AR = {
+  open:false, running:false, overlay:true, mode:'flick', phase:'idle',
+  dpi:1600, cm:27.214, cm0:27.214, lo:15, hi:50, range:1.8, per:8,
+  st:null, round:0, targetNo:0, warm:3, samples:[], firstEnd:null,
+  view:0, startView:0, target:0, dist:0, radius:2.2, sgn:1, cum:0, lastMoveT:0,
+  calib:0, calibMode:false, raw:false, scale:1,
+  blocks:[], blind:null, blindOrder:[], blindIdx:0, blindData:{A:{biases:[],hits:0},B:{biases:[],hits:0}},
+  drills:{}, trials:[], onFrames:0, totFrames:0, jitter:0, clicks:0, hits:0,
+  t0:0, trackBase:0, timer:null, lastFrame:0, report:null
+};
+window.SensLabState = AR; // 开源接口：可读取测试状态 / 二次开发
+const $A = {
+  arena:$('arena'), cv:$('arenaCanvas'), overlay:$('arenaOverlay'),
+  ovTitle:$('ovTitle'), ovBody:$('ovBody'), ovKey:$('ovKey'), ovBtn:$('ovBtn'),
+  hMode:$('hMode'), hRound:$('hRound'), hCount:$('hCount'), hCm:$('hCm'),
+  hOver:$('hOver'), hUnder:$('hUnder'), hRaw:$('hRaw'), flash:$('arenaFlash')
+};
+let actx=null;
+
+function median(a){
+  if(!a.length) return 0;
+  const v=a.slice().sort((x,y)=>x-y), m=v.length>>1;
+  return v.length%2? v[m] : (v[m-1]+v[m])/2;
+}
+function loadCalib(){
+  try{
+    const c=JSON.parse(localStorage.getItem('senslink.calib')||'null');
+    if(c && +c.ppc>0){ AR.calib=+c.ppc; }
+  }catch(e){}
+}
+function saveCalib(){
+  try{ localStorage.setItem('senslink.calib',JSON.stringify({ppc:AR.calib,dpi:AR.dpi,ts:Date.now()})); }catch(e){}
+}
+function calcScale(){
+  const ideal = AR.dpi/2.54; // 真实 DPI 下每厘米计数
+  AR.scale = AR.calib>0 ? ideal/AR.calib : 1;
+}
+function dpc(){ return 914.4/(AR.dpi*AR.cm)*AR.scale; }
+function currentCmFromState(){
+  const g=getGame(state.g);
+  return cm360(state.d,effSens(),g.yaw);
+}
+function isTouchDevice(){
+  if(!('requestPointerLock' in document.body)) return true;
+  const mq = window.matchMedia;
+  if(!mq) return false;
+  const fine = mq('(any-pointer: fine)').matches;   // 触屏笔记本仍有鼠标 → 允许测
+  if(fine) return false;
+  return mq('(pointer: coarse)').matches || navigator.maxTouchPoints>0;
+}
+
+/* ===================== 靶场：画布 ===================== */
+function sizeArena(){
+  const c=$A.cv, r=c.getBoundingClientRect(), dpr=Math.min(2,window.devicePixelRatio||1);
+  c.width=Math.max(1,Math.round(r.width*dpr)); c.height=Math.max(1,Math.round(r.height*dpr));
+  actx=c.getContext('2d'); actx.setTransform(dpr,0,0,dpr,0,0);
+  return {w:r.width,h:r.height};
+}
+const FOV = 103, HALF = Math.tan(FOV/2*Math.PI/180);
+function proj(rel,w){ return w/2 + Math.tan(rel*Math.PI/180)/HALF*(w/2); }
+function drawArena(){
+  if(!actx) return;
+  const {w,h}=sizeArena();
+  actx.clearRect(0,0,w,h);
+  const g=actx.createLinearGradient(0,0,0,h);
+  g.addColorStop(0,'#10151f'); g.addColorStop(1,'#080b11');
+  actx.fillStyle=g; actx.fillRect(0,0,w,h);
+  // 视角刻度：帮助感知转到哪了
+  actx.strokeStyle='rgba(255,255,255,.045)'; actx.lineWidth=1;
+  for(let a=-90;a<=90;a+=15){ const x=proj(a-Math.round(AR.view/15)*15,w); actx.beginPath(); actx.moveTo(x,0); actx.lineTo(x,h); actx.stroke(); }
+  actx.strokeStyle='rgba(24,224,189,.10)'; actx.beginPath(); actx.moveTo(w/2,0); actx.lineTo(w/2,h); actx.stroke();
+  if(!AR.running) return;
+  const rel=AR.target-AR.view;
+  const x=proj(rel,w), r=Math.abs(proj(rel+AR.radius,w)-proj(rel-AR.radius,w))/2;
+  if(Math.abs(rel)<82){
+    actx.beginPath(); actx.arc(x,h/2,Math.max(4,r),0,Math.PI*2);
+    actx.fillStyle= AR.mode==='micro'? 'rgba(255,180,84,.85)':'rgba(255,70,85,.85)'; actx.fill();
+    actx.lineWidth=2; actx.strokeStyle='#ffb0b8'; actx.stroke();
+    actx.beginPath(); actx.arc(x,h/2,Math.max(2,r*0.32),0,Math.PI*2); actx.fillStyle='#fff'; actx.fill();
+  }else{
+    const right = rel>0;
+    actx.fillStyle='#ffb454'; actx.font='700 18px system-ui'; actx.textAlign=right?'right':'left';
+    actx.fillText(right?'靶在右侧 →':'← 靶在左侧', right?w-24:24, h/2);
+  }
+}
+function flash(text,color){
+  $A.flash.textContent=text; $A.flash.style.color=color; $A.flash.style.opacity=1;
+  setTimeout(()=>{ $A.flash.style.opacity=0; },230);
+}
+function updateHud(){
+  $A.hMode.textContent = AR.calibMode?'校准':({flick:'甩枪收敛',track:'追踪压靶',micro:'微修正'}[AR.mode]||'—');
+  $A.hRound.textContent = AR.phase==='blind' ? ('盲测 '+(AR.blindIdx+1)+'/2') : String(AR.round);
+  $A.hCount.textContent = AR.phase==='track'||AR.phase==='micro'
+    ? Math.max(0,Math.ceil((AR.dur*1000-(performance.now()-AR.t0))/1000))+'s'
+    : (AR.targetNo+'/'+((AR.phase==='blind'?6:AR.per+AR.warm)));
+  $A.hCm.textContent = AR.blind && AR.phase==='blind' ? '隐藏' : AR.cm.toFixed(2);
+  const b=AR.blocks.length? AR.blocks[AR.blocks.length-1].biases : [];
+  $A.hOver.textContent = b.filter(x=>x>0.06).length;
+  $A.hUnder.textContent = b.filter(x=>x<-0.06).length;
+  $A.hRaw.textContent = AR.raw ? '' : '⚠ 未取得原始输入，建议先校准';
+}
+function showOverlay(title,body,key,btn,action){
+  AR.nextAction = (typeof action==='function')?action:null;
+  $A.overlay.classList.remove('hidden'); AR.overlay=true;
+  $A.ovTitle.textContent=title; $A.ovBody.innerHTML=body;
+  $A.ovKey.textContent=key||''; $A.ovBtn.textContent=btn||'继续';
+  $A.ovBtn.style.display = btn===null?'none':'inline-block';
+}
+function hideOverlay(){ $A.overlay.classList.add('hidden'); AR.overlay=false; }
+function openArena(mode){
+  AR.mode = mode || 'flick';
+  AR.open = true; $A.arena.classList.add('show');
+  AR.dpi = Math.max(100,+$('tDpi').value||state.d||1600);
+  AR.range = +$('tRange').value||1.8;
+  AR.per = +$('tPer').value||8;
+  AR.cm0 = Math.max(5,Math.min(150,+$('tStart').value||currentCmFromState()));
+  AR.cm = AR.cm0; AR.lo = AR.cm0/AR.range; AR.hi = AR.cm0*AR.range;
+  AR.st = {cm:AR.cm,lo:AR.lo,hi:AR.hi,step:0.18,reversals:0,lastDir:0,rounds:0,noise:0.06,maxRounds:10};
+  AR.round=0; AR.blocks=[]; AR.trials=[]; AR.blind=null; AR.blindIdx=0; AR.phase='idle';
+  AR.view=0; AR.calibMode=false; calcScale();
+  sizeArena(); drawArena();
+  if(AR.mode==='flick'){
+    showOverlay('甩枪灵敏度测试',
+      '靶子出现后，<b>一次快速甩过去并点击</b>，不要慢慢修正——算法量的是你第一下弹道挥动的落点。<br>前 3 个靶是热身不计分。每轮 '+AR.per+' 次有效甩枪，工具会根据「过头 / 不足」自动调整 cm/360，收敛后再做一轮盲测 A/B。',
+      '开始后鼠标会被锁定 · ESC 随时退出','开始测试', beginSession);
+  }else if(AR.mode==='track'){
+    showOverlay('交叉验证 · 追踪压靶 15 秒',
+      '靶子会左右平滑移动，用准星尽量一直压住它。记录压靶时间占比与抖动量。<br>这一项<b>不参与收敛</b>，只用来交叉检查：过高灵敏度通常表现为抖动/过度修正。',
+      '开始后鼠标会被锁定 · ESC 随时退出','开始 15s', beginSession);
+  }else{
+    showOverlay('交叉验证 · 微修正 20 秒',
+      '近距离小靶，做小幅精确修正并点击命中。记录命中率与每靶点击数。<br>这一项<b>不参与收敛</b>：过低灵敏度通常表现为修正拖沓、耗时变长。',
+      '开始后鼠标会被锁定 · ESC 随时退出','开始 20s', beginSession);
+  }
+  updateHud();
+}
+function closeArena(){
+  AR.open=false; AR.running=false; AR.overlay=true;
+  if(AR.timer){ clearInterval(AR.timer); AR.timer=null; }
+  if(document.pointerLockElement) document.exitPointerLock();
+  $A.arena.classList.remove('show');
+  renderTestPanel();
+}
+function requestLock(){
+  try{
+    const el=$A.arena;
+    const p = el.requestPointerLock({unadjustedMovement:true});
+    if(p && typeof p.then==='function'){
+      p.then(()=>{ AR.raw=true; setRawNote(); }).catch(()=>{
+        try{ el.requestPointerLock(); }catch(e){}
+        AR.raw=false; setRawNote();
+      });
+    }else{ AR.raw=false; setRawNote(); }
+  }catch(e){
+    try{ $A.arena.requestPointerLock(); }catch(x){}
+    AR.raw=false; setRawNote();
+  }
+}
+function setRawNote(){
+  $('tRaw').textContent = AR.raw ? '原始输入：已取得（unadjustedMovement）' : '原始输入：未取得，请先校准 / 关闭指针加速';
+  const d=$('tDot'); d.className='dot '+(AR.raw?'on':'off');
+  updateHud();
+}
+
+/* ===================== 靶场：主流程 ===================== */
+function beginSession(){
+  hideOverlay(); requestLock();
+  AR.phase = AR.mode;
+  AR.running = true;
+  AR.t0 = performance.now();
+  if(AR.mode==='flick'){ startBlock(); }
+  else { AR.dur = AR.mode==='track'?15:20; AR.trackBase=0; AR.onFrames=0; AR.totFrames=0;
+         AR.jitter=0; AR.jitterN=0; AR.clicks=0; AR.hits=0; AR.target=AR.view+14; AR.radius=AR.mode==='track'?3:0.9;
+         startFrameLoop(); }
+}
+function startFrameLoop(){
+  if(AR.timer) clearInterval(AR.timer);
+  AR.lastFrame=performance.now();
+  AR.timer=setInterval(()=>{
+    const now=performance.now();
+    if(!AR.running){ drawArena(); return; }
+    AR.totFrames++;
+    const dt=Math.max(1,now-AR.lastFrame); AR.lastFrame=now;
+    if(AR.mode==='track'){
+      const t=(now-AR.t0)/1000;
+      AR.target = AR.trackBase + 16*Math.sin(t*1.25) + 5*Math.sin(t*2.7);
+      if(Math.abs(AR.target-AR.view)<AR.radius) AR.onFrames++;
+    }else{
+      if(!AR.targetAlive) spawnMicro();
+    }
+    if(now-AR.t0 > AR.dur*1000){ finishDrill(); return; }
+    updateHud(); drawArena();
+  },16);
+}
+function spawnMicro(){
+  const dir=Math.random()<0.5?-1:1;
+  AR.dist=4+Math.random()*5; AR.sgn=dir;
+  AR.startView=AR.view; AR.target=AR.view+dir*AR.dist;
+  AR.radius=0.9; AR.targetAlive=true; AR.samples=[]; AR.firstEnd=null; AR.cum=0;
+}
+function finishDrill(){
+  AR.running=false; clearInterval(AR.timer); AR.timer=null;
+  const r = AR.mode==='track'
+    ? {pct:Math.round(100*AR.onFrames/Math.max(1,AR.totFrames)), jitter:+(AR.jitter/Math.max(1,AR.jitterN)).toFixed(3)}
+    : {hits:AR.hits, clicks:AR.clicks, acc:AR.clicks?Math.round(100*AR.hits/AR.clicks):0};
+  AR.drills[AR.mode]=r;
+  const txt = AR.mode==='track'
+    ? `追踪压靶 <b>${r.pct}%</b>，平均每次采样抖动 ${r.jitter}°。抖动明显偏高通常说明灵敏度偏快。`
+    : `微修正命中 <b>${r.hits}/${AR.clicks}</b>（${r.acc}%）。每靶多次点击、明显拖沓通常说明灵敏度偏慢。`;
+  showOverlay('交叉验证完成',txt+'<br>结果已写进下方报告，<b>不会改动推荐值</b>。','','返回',closeArena);
+  renderTestPanel();
+}
+function resumeBlock(){
+  AR.running=true; AR.overlay=false;
+  if(AR.mode==='flick'){ startBlock(); }
+  else { AR.t0=performance.now(); if(!AR.timer) startFrameLoop(); }
+}
+function startBlock(){
+  AR.phase = AR.phase==='blind' ? 'blind' : 'flick';
+  AR.targetNo=0; AR.blocks.push({cm:AR.cm,phase:AR.phase,biases:[],hits:0,clean:0,over:0,under:0,dist:[]});
+  AR.t0=performance.now();
+  nextTarget();
+}
+function nextTarget(){
+  const blindMode = AR.phase==='blind';
+  const total = blindMode?6:(AR.per+AR.warm);
+  if(AR.targetNo>=total){ finishBlock(); return; }
+  const dir=Math.random()<0.5?-1:1;
+  AR.dist=12+Math.random()*26; AR.sgn=dir;
+  AR.startView=AR.view; AR.target=AR.view+dir*AR.dist;
+  AR.radius=2.2; AR.samples=[]; AR.firstEnd=null; AR.cum=0; AR.lastMoveT=0;
+  drawArena(); updateHud();
+}
+function onArenaMove(e){
+  if(!AR.open || AR.overlay) return;
+  const mx = +(e.movementX||0);
+  if(!mx) return;
+  const now=performance.now();
+  if(AR.calibMode){ AR.calibSum += Math.abs(mx); return; }
+  const dx = mx*dpc();
+  AR.view += dx;
+  if(AR.running && (AR.mode==='track')){ AR.jitter += Math.abs(dx); AR.jitterN++; }
+  if(AR.running && AR.phase!=='track' && AR.phase!=='micro'){
+    const d = dx*AR.sgn;
+    AR.samples.push({t:now,d});
+    if(AR.firstEnd===null && AR.samples.length>1){
+      const gap = now-AR.lastMoveT;
+      if((gap>85 && AR.cum>0.25*AR.dist) || (d<-0.12 && AR.cum>0.25*AR.dist)){
+        AR.firstEnd = AR.cum; AR.cleanFlag=true;
+      }
+    }
+    AR.cum += d; AR.lastMoveT=now;
+  }
+  // 帧间停顿检测（没新事件时也要能收尾第一段）
+  drawArena();
+}
+function onArenaDown(e){
+  if(!AR.open || AR.overlay || !AR.running) return;
+  if(e.target===$A.ovBtn || e.target===$('arenaExit')) return;
+  if(AR.calibMode){
+    const ppc = AR.calibSum/10;
+    if(ppc>0){ AR.calib=ppc; saveCalib(); calcScale(); }
+    AR.calibMode=false; AR.raw=false;
+    showOverlay('校准完成',`实测 <b>${ppc.toFixed(1)} 计数/cm</b>，按 ${AR.dpi} DPI 换算补偿系数 <b>${AR.scale.toFixed(3)}</b>。<br>若这个数和 ${ (AR.dpi/2.54).toFixed(1) } 差很多，说明系统仍在缩放指针：请把 Windows 指针速度设为 6/11、关闭「提高指针精确度」，再测一次。`,'','返回测试',closeArena);
+    setRawNote(); renderTestPanel(); return;
+  }
+  if(AR.mode==='micro'){
+    AR.clicks++;
+    if(Math.abs(AR.target-AR.view)<AR.radius){ AR.hits++; flash('命中','#5ad19a'); AR.targetAlive=false; }
+    else flash('偏了','#ff4655');
+    return;
+  }
+  if(AR.mode==='track') return;
+  const a=analyzeFlick(AR.samples,AR.dist);
+  const hit = Math.abs(AR.target-AR.view)<=AR.radius;
+  const blk=AR.blocks[AR.blocks.length-1];
+  const warmup = AR.phase==='blind'?0:AR.warm;
+  if(AR.targetNo>=warmup){
+    blk.biases.push(a.bias); blk.dist.push(AR.dist);
+    if(hit) blk.hits++;
+    if(a.clean) blk.clean++;
+    if(a.bias>0.06) blk.over++; if(a.bias<-0.06) blk.under++;
+  }
+  AR.trials.push({ts:Date.now(),mode:AR.mode,phase:AR.phase,round:AR.round,cm:AR.cm,
+    dist:+AR.dist.toFixed(2),bias:+a.bias.toFixed(4),endpoint:+a.endpoint.toFixed(2),
+    clean:a.clean,hit,ms:Math.round(a.duration)});
+  flash(hit?'✓':'●',hit?'#5ad19a':'#ffb454');
+  AR.targetNo++;
+  setTimeout(()=>{ if(AR.open && AR.running) nextTarget(); },210);
+}
+function finishBlock(){
+  const blk=AR.blocks[AR.blocks.length-1];
+  const b=median(blk.biases);
+  blk.median=b;
+  if(AR.phase==='blind'){
+    const label = AR.blindOrder[AR.blindIdx];
+    const slot=AR.blindData[label];
+    slot.biases=blk.biases.slice(); slot.hits=blk.hits; slot.cm=blk.cm;
+    AR.blindIdx++;
+    if(AR.blindIdx>=2){ finishSession(); return; }
+    AR.cm = AR.blindOrder[AR.blindIdx]==='A' ? AR.blind.rec : AR.blind.decoy;
+    showOverlay('盲测继续',
+      '下一档已切换，界面不显示数值。请<b>用完全相同的节奏</b>再打 6 个靶。<br>不要猜哪个是推荐值——猜了就会不自觉地改变发力。','','开始下一档',resumeBlock);
+    return;
+  }
+  const next=staircaseStep(AR.st,b);
+  AR.st=next; AR.cm=next.cm; AR.round=next.rounds;
+  drawChart(); renderTestPanel();
+  if(next.converged || next.hitBoundary){ startBlind(); return; }
+  const pct=(b*100).toFixed(1);
+  const why = b>AR.st.noise ? '系统性冲过头 → 调慢' : (b<-AR.st.noise ? '系统性不到位 → 调快' : '偏差已在噪声带内');
+  showOverlay(`第 ${AR.round} 轮完成`,
+    `本轮中位偏差 <b>${pct>0?'+':''}${pct}%</b>（过头 ${blk.over} / 不足 ${blk.under}，干净甩枪 ${blk.clean}/${blk.biases.length}）。<br>${why}，下一档 <b>${AR.cm.toFixed(2)} cm/360</b>，步长已收缩到 ${(AR.st.step*100).toFixed(0)}%。`,
+    '保持同一套握法、同一块鼠标垫，别热身到出汗再测','继续下一轮',resumeBlock);
+}
+function startBlind(){
+  AR.phase='blind'; AR.round=AR.st.rounds;
+  const rec=AR.cm, decoy=rec*(Math.random()<0.5?1.12:0.89);
+  AR.blind={rec,decoy};
+  const aFirst=Math.random()<0.5;
+  AR.blindOrder = aFirst?['A','B']:['B','A'];
+  AR.blindIdx=0;
+  AR.blindData={A:{biases:[],hits:0,cm:0},B:{biases:[],hits:0,cm:0}};
+  AR.cm = AR.blindOrder[0]==='A'?rec:decoy;
+  AR.blindData[AR.blindOrder[0]].cm=AR.cm;
+  showOverlay('进入盲测 A / B',
+    `收敛到 <b>${rec.toFixed(2)} cm/360</b>。现在把推荐值和一个 ±12% 的诱饵随机排成 A、B 两档，各打 6 个靶，<b>界面不告诉你是哪一档</b>。<br>由「首次甩枪偏差 + 命中数」判定，推荐值没赢就如实报没赢。`,'','开始盲测 A',resumeBlock);
+  renderTestPanel();
+}
+function finishSession(){
+  AR.running=false;
+  const v=blindVerdict(AR.blindData.A,AR.blindData.B);
+  const recLabel = AR.blindOrder.find(l=>Math.abs(AR.blindData[l].cm-AR.blind.rec)<1e-6) || 'A';
+  const recWon = v.winner===recLabel;
+  const yaw=getGame(state.g).yaw;
+  const sens=sensFromCm(AR.blind.rec,AR.dpi,yaw);
+  const allBiases=AR.trials.filter(t=>t.phase!=='blind').map(t=>t.bias);
+  const over=allBiases.filter(x=>x>0.06).length, under=allBiases.filter(x=>x<-0.06).length;
+  AR.report={ts:Date.now(),dpi:AR.dpi,cm:+AR.blind.rec.toFixed(3),sens:+sens.toFixed(5),
+    edpi:+(AR.dpi*sens).toFixed(1),rounds:AR.round,reversals:AR.st.reversals,
+    blind:{...v,recLabel,recWon,decoy:+AR.blind.decoy.toFixed(3)},
+    over,under,n:allBiases.length,firstMedian:+median(AR.blocks[0]?AR.blocks[0].biases:[]).toFixed(4),
+    lastMedian:+median((AR.blocks.filter(x=>x.phase!=='blind').slice(-1)[0]||{biases:[]}).biases).toFixed(4),
+    drills:JSON.parse(JSON.stringify(AR.drills)),trials:AR.trials.slice(),games:state.g};
+  saveSession(AR.report);
+  if(document.pointerLockElement) document.exitPointerLock();
+  const ok=recWon;
+  showOverlay(ok?'测试完成':'测试完成 · 但没测出优势',
+    `推荐 <b>${AR.blind.rec.toFixed(2)} cm/360</b> → 在 ${AR.dpi} DPI 下端瓦灵敏度 <b>${sens.toFixed(3)}</b>（eDPI ${Math.round(AR.dpi*sens)}）。<br>盲测结论：<b>${ok?'推荐值胜出':'无显著差异 / 诱饵胜出'}</b> · 置信度 ${v.confidence==='high'?'高':v.confidence==='medium'?'中':'低'}。${v.note}<br>详细报告、收敛曲线与全部试验数据已写进下方。`,
+    '','查看报告',closeArena);
+  AR.phase='done';
+  renderTestPanel(); renderReport();
+}
+function saveSession(r){
+  let list=[]; try{ list=JSON.parse(localStorage.getItem('senslink.sessions')||'[]'); }catch(e){}
+  list.unshift({...r, blind:r.blind.winner, conf:r.blind.confidence,
+    recWon:r.blind.recWon, cmTrace:AR.blocks.map(b=>+b.cm.toFixed(3))});
+  try{ localStorage.setItem('senslink.sessions',JSON.stringify(list.slice(0,20))); }catch(e){}
+}
+function sessions(){ try{ return JSON.parse(localStorage.getItem('senslink.sessions')||'[]'); }catch(e){ return []; } }
+
+/* ===================== 靶场：面板与报告 ===================== */
+function drawChart(){
+  const c=$('chart'), ctx=c.getContext('2d'), W=c.width, H=c.height;
+  ctx.clearRect(0,0,W,H); ctx.fillStyle='#0a0f17'; ctx.fillRect(0,0,W,H);
+  const trace=AR.blocks.map(b=>b.cm);
+  if(!trace.length){
+    ctx.fillStyle='#66748a'; ctx.font='20px system-ui'; ctx.textAlign='center';
+    ctx.fillText('开始测试后，这里会画出 cm/360 的收敛轨迹',W/2,H/2+7); return;
+  }
+  const lo=Math.min(AR.lo,...trace), hi=Math.max(AR.hi,...trace), pad=34;
+  const y=v=>H-pad-(v-lo)/Math.max(1e-6,hi-lo)*(H-pad*2);
+  ctx.strokeStyle='#2a3342'; ctx.lineWidth=1;
+  for(let i=0;i<=4;i++){ const yy=pad+i*(H-pad*2)/4; ctx.beginPath(); ctx.moveTo(pad,yy); ctx.lineTo(W-pad,yy); ctx.stroke(); }
+  ctx.strokeStyle='#18e0bd'; ctx.lineWidth=3; ctx.beginPath();
+  trace.forEach((v,i)=>{ const xx=pad+(trace.length<2?0:i/(trace.length-1))*(W-pad*2); i?ctx.lineTo(xx,y(v)):ctx.moveTo(xx,y(v)); });
+  ctx.stroke();
+  trace.forEach((v,i)=>{
+    const xx=pad+(trace.length<2?0:i/(trace.length-1))*(W-pad*2);
+    const bias=AR.blocks[i].median;
+    ctx.fillStyle= bias>0.06?'#ff4655':bias<-0.06?'#5aa8ff':'#18e0bd';
+    ctx.beginPath(); ctx.arc(xx,y(v),6,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='#93a1b5'; ctx.font='16px ui-monospace,monospace'; ctx.textAlign='center';
+    ctx.fillText(v.toFixed(1),xx,y(v)-14);
+  });
+  ctx.fillStyle='#66748a'; ctx.font='15px system-ui'; ctx.textAlign='left';
+  ctx.fillText('cm/360 收敛轨迹（红=过头 / 蓝=不足 / 绿=噪声带内）',pad,20);
+}
+function renderTestPanel(){
+  $('tDpi').value=AR.dpi||state.d;
+  $('tStart').value=(+$('tStart').value||AR.cm0||currentCmFromState()).toFixed(2);
+  $('tCurCm').textContent=(AR.report?AR.report.cm:AR.cm).toFixed(2);
+  $('tRound').textContent=AR.round;
+  $('tPhase').textContent=({idle:'未开始',flick:'甩枪收敛中',blind:'盲测 A/B',track:'追踪压靶',micro:'微修正',done:'已完成'}[AR.phase]||'—');
+  $('tApplyBtn').disabled=!sessions().length;
+  const touch=isTouchDevice();
+  $('tStartBtn').disabled=touch;
+  $('tStartBtn').textContent=touch?'请在电脑端用鼠标测试':'进入靶场 · 开始测试';
+  $('tNote').className='note '+(AR.report?'ok':'');
+  $('tNote').textContent= touch
+    ? '⚠ 当前是触屏 / 不支持鼠标锁定的设备：测试必须在电脑端用鼠标完成。手机端可查看报告、换算和共享配置。'
+    : (AR.report
+      ? `✓ 已完成一次测试：推荐 ${AR.report.cm} cm/360。建议同一天再测 2 次看方向是否一致，再填进游戏打 10 局。`
+      : '开始前请确认：Windows 指针速度 6/11、关闭「提高指针精确度」、浏览器缩放 100%、驱动无鼠标加速。');
+  drawChart();
+}
+function renderReport(){
+  const list=sessions();
+  const box=$('tReport');
+  if(!list.length){ box.innerHTML='<div class="hint" style="margin:0">还没有测试记录。完成一次主测试后这里会给出推荐值、过头/不足比例、收敛轨迹和盲测结论。</div>'; }
+  else{
+    const r=list[0];
+    const b=r.trials?r.trials.filter(t=>t.phase!=='blind'):[];
+    const ok=r.recWon, conf=r.blind==='tie'?'低':(r.conf==='high'?'高':'中');
+    const track=r.drills&&r.drills.track, micro=r.drills&&r.drills.micro;
+    box.innerHTML=`
+      <div class="report">
+        <div class="stat hl"><b>${r.cm.toFixed(2)}</b><span>推荐 cm/360</span></div>
+        <div class="stat"><b>${Number(r.sens).toFixed(3)}</b><span>端瓦 @ ${r.dpi} DPI</span></div>
+        <div class="stat"><b>${Math.round(r.edpi)}</b><span>eDPI</span></div>
+        <div class="stat"><b>${r.rounds}</b><span>收敛轮次</span></div>
+        <div class="stat"><b>${r.over} / ${r.under}</b><span>过头 / 不足（共 ${r.over+r.under} 次）</span></div>
+        <div class="stat"><b>${conf}</b><span>盲测置信度</span></div>
+      </div>
+      <div class="verdict ${ok?'':'warn'}">
+        <b>盲测结论：</b>${ok?'推荐值胜出':'没有测出可分辨的优势'}。${ok?'':'建议保持你原来的设置，不要为了小数点反复调。'}
+        本次共 ${r.trials?r.trials.length:0} 次甩枪记录，${r.blind==='tie'?'A/B 打平':''}。
+        ${track?`追踪压靶 <b>${track.pct}%</b>；`:''}${micro?`微修正命中 <b>${micro.acc}%</b>；`:''}
+        ${(!track&&!micro)?'还没跑交叉验证：追踪 / 微修正能暴露「只顾甩枪」的偏科。':''}
+      </div>
+      <ul class="tips">
+        <li>这是<b>今天、这套桌椅鼠标垫下</b>最顺手的甩枪值，不是永久最优；换鼠标垫 / 握法 / 状态漂移后要重测。</li>
+        <li>同一天测 <b>2~3 次方向一致</b>才采信，下方历史就是用来看这个的。</li>
+        <li>填进游戏后<b>至少打 10 局、固定用一周</b>再评价；任何新灵敏度头一小时都会觉得别扭。</li>
+        <li>只测腰射甩枪：开镜倍率、压枪、身法、FOV 观感都不在本报告的结论里。</li>
+      </ul>`;
+  }
+  $('tHist').innerHTML=list.length? list.map((r,i)=>
+    `<tr><td>${new Date(r.ts).toLocaleString('zh-CN',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'})}</td>
+     <td class="num">${(+r.cm).toFixed(2)}</td><td>${Number(r.sens).toFixed(3)} @ ${r.dpi}</td>
+     <td>${r.rounds} 轮</td><td>${r.recWon?'推荐胜':(r.blind==='tie'?'打平':'诱饵胜')}</td>
+     <td>${r.over}/${r.under}</td></tr>`).join('')
+    : '<tr><td colspan="6" style="color:var(--dim)">暂无历史</td></tr>';
+}
+function applyReport(){
+  const list=sessions(); if(!list.length) return toast('先完成一次测试');
+  const r=list[0], yaw=getGame(state.g).yaw;
+  state.d=r.dpi; state.td=r.dpi; state.same=true;
+  state.s=Number(sensFromCm(r.cm,r.dpi,yaw).toFixed(6)); state.m=0;
+  syncInputs(); render(); toast('已把测试结果设为换算基准');
+}
+function startCalib(){
+  if(isTouchDevice()) return toast('校准需要鼠标，请在电脑端进行');
+  openArena('flick');
+  AR.calibMode=true; AR.calibSum=0;
+  showOverlay('校准鼠标计数',
+    '拿一把尺子，把鼠标<b>沿直线向右平移整整 10 cm</b>（尽量匀速、单向、不抬鼠），到位后<b>点击一下</b>。<br>工具会算出「每厘米上报多少计数」，用来补偿没有原始输入时的系统指针缩放。',
+    '点击「开始」后开始计数，量完点一下即可','开始校准',()=>{ hideOverlay(); requestLock(); AR.running=true; AR.overlay=false; });
+}
+
+/* ===================== 靶场：事件 ===================== */
+document.addEventListener('mousemove',onArenaMove);
+document.addEventListener('mousedown',onArenaDown);
+document.addEventListener('pointerlockchange',()=>{
+  if(!document.pointerLockElement && AR.open && AR.running && !AR.overlay){
+    // ESC 解锁视为暂停
+    AR.running=false;
+    showOverlay('已暂停','鼠标锁定已解除。点继续可以回到当前这一档，进度不会丢。','ESC 可随时退出','继续测试',resumeBlock);
+  }
+});
+window.addEventListener('resize',()=>{ if(AR.open) drawArena(); });
+$('tStartBtn').addEventListener('click',()=>{ if(!isTouchDevice()) openArena('flick'); });
+document.querySelectorAll('[data-mode]').forEach(b=>b.addEventListener('click',()=>{
+  document.querySelectorAll('[data-mode]').forEach(x=>x.classList.remove('active'));
+  b.classList.add('active');
+}));
+$('tModeTrack').addEventListener('click',()=>{ if(!isTouchDevice()) openArena('track'); else toast('实测需要电脑 + 鼠标'); });
+$('tModeMicro').addEventListener('click',()=>{ if(!isTouchDevice()) openArena('micro'); else toast('实测需要电脑 + 鼠标'); });
+$('tCalibBtn').addEventListener('click',startCalib);
+$('tApplyBtn').addEventListener('click',applyReport);
+$('tResetBtn').addEventListener('click',()=>{
+  AR.report=null; AR.round=0; AR.blocks=[]; AR.trials=[]; AR.phase='idle'; AR.cm=AR.cm0||currentCmFromState();
+  renderTestPanel(); toast('测试进度已清空（历史记录保留）');
+});
+$('tExportBtn').addEventListener('click',()=>copy(JSON.stringify(sessions(),null,2)));
+$('tClearHistBtn').addEventListener('click',()=>{
+  localStorage.removeItem('senslink.sessions'); AR.report=null; renderReport(); renderTestPanel(); toast('历史已清空');
+});
+$('ovBtn').addEventListener('click',()=>{
+  const fn = AR.nextAction || (AR.phase==='done'?closeArena:beginSession);
+  hideOverlay();
+  if(typeof fn==='function') fn();
+});
+$('arenaExit').addEventListener('click',()=>{ closeArena(); toast('已退出靶场，进度保留'); });
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape' && AR.open && !document.pointerLockElement){ closeArena(); }
+});
+
 /* ===================== 启动 ===================== */
 fillSelects(); syncInputs(); render();
+loadCalib(); calcScale(); renderTestPanel(); renderReport();
+$('applyReport2').addEventListener('click',applyReport);
 if(new URLSearchParams(location.search).get('s')) setTimeout(()=>toast('已从分享链接还原配置'),300);
 </script>
 </body>
